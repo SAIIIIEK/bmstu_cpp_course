@@ -42,5 +42,4 @@ int str2int(const char *str) {
     }
 
     return result * sign;
-
 }
