@@ -4,93 +4,87 @@
 #include <iostream>
 #include <utility>
 
+using std::forward;
+using std::move;
+using std::underflow_error;
+
 namespace bmstu
 {
-// срздаём шаблонный класс с типом данных T. при вызове функции компилятор
-// заменит Т на конкретный аргумент указанного пользователем типа
 template <typename T>
 class stack
 {
    public:
-  stack() = default;     // конструктор
-  ~stack() { clear(); }  // диструктор
+  stack() = default;
+  ~stack() { clear(); }
 
-  bool empty() const noexcept { return size_ == 0; }  // пуст ли
+  bool empty() const noexcept { return size_ == 0; }
 
-  size_t size() const noexcept { return size_; }  // размер
+  size_t size() const noexcept { return size_; }
 
-  template <typename... Args>   // троеточие используется, когда шаблон может
-                 // принимать любое число параметров.
-                 void emplace(Args&&... args)  //
+  template <typename... Args>
+                 void emplace(Args&&... args)
   {
     T* new_data = get_new();
-    new (&new_data[size_]) T(std::forward<Args>(
-      args)...);  // в нашем случае нью создаёт объект уже в выделенной
-            // памяти по указоннуму адресу, а не выделяет новую.
-    // форвард позволяет передавать элементы сохраняя их значения рвалью и
-    // лвалью. троеточие распаковывает пакет аргс
-    // грубо говоря тут мы поочереди перекидываем элементы из даты в нью
-    // дату сохраняя рвалью и лвалью
-    operator delete(data_);   // вызываем оператор очищающий память
-    data_ = new_data;  // в ранее очищенную дату закидываем новую дату
+    new (&new_data[size_]) T(forward<Args>(
+      args)...);
+    operator delete(data_);
+    data_ = new_data;
     size_++;
   }
 
   void clear() noexcept
   {
-    for (size_t i = 0; i < size_; ++i)  // проходимся по стеку
+    for (size_t i = 0; i < size_; ++i)
 
     {
-      T* ptr = &data_[i];   // обращаемся к элементу
-      ptr->~T();       // вызывыаем диструктор
+      T* ptr = &data_[i];
+      ptr->~T();
     }
-    operator delete(data_);   // очищаем память
-    data_ = nullptr;  // значение даты - пустой указатель
+    operator delete(data_);
+    data_ = nullptr;
     size_ = 0;
   }
 
   void push(const T& value)
   {
     emplace(value);
-  }  // метот эмплейс позволяет создать новый элемент в контейнере
+  } 
 
   void push(T&& value)
   {
-    emplace(std::move(value));
-  }  // используя мув мы перемещаем элементы, а не копируем их, это быстрее
-
-  void pop()  // убираем элемент массива. по идее стоило бы возвращать этот
-        // элемент, однако функция типо войд, значит возвращать не стоит
-  {
-    if (empty())
-    {
-      throw std::underflow_error(
-        "Stack is empty");  // исключительная ситуация, если стек пустой
-    }
-    data_[size_ - 1].~T();  // обращаемся к последнему элементу стека и
-                // вызываем диструктор
-    --size_;  // уменьшаем размер стека
+    emplace(move(value));
   }
 
-  T& top()  // для рвалью
+  void pop()
   {
     if (empty())
     {
-      throw std::underflow_error(
-        "Stack is empty");  // исключительная ситуация, если стек пустой
+      throw underflow_error(
+        "Stack is empty");
+    }
+    data_[size_ - 1].~T();
+    --size_;
+  }
+
+  T& top()
+  {
+    if (empty())
+    {
+      throw underflow_error(
+        "Stack is empty");
     }
     else
     {
-      return data_[size_ - 1];  // возвращаем последний элемент стека
+      return data_[size_ - 1];
     }
   }
 
-  const T& top() const  // для лвалью
+  const T& top() const
   {
     if (empty())
     {
-      throw std::underflow_error(
-        "Stack is empty");  // исключительная ситуация, если стек пустой
+      throw underflow_error(
+        "Stack is empty");
     }
     else
     {
@@ -99,33 +93,21 @@ class stack
   }
 
    private:
-  T* data_ = nullptr;   // по умолчанию стек пуст
-  size_t size_ = 0;   // размер стека так же нулевой
+  T* data_ = nullptr;
+  size_t size_ = 0;
 
   T* get_new()
   {
     T* new_data = static_cast<T*>(operator new(
       sizeof(T) *
-      (size_ + 1)));  // создаём новую дату типа Т. Оператор нью выделяет
-              // блок памяти из кучи и даёт указатель на него
-    // сайзоф с указателем на размер стека плюс один определяет колличество
-    // байтов нужных для хранения элементов статик каст даёт новый тип Т
-    // вместо войд, который вернул оператор нью чтобы он соответствовал типу
-    // нью дата
-    for (size_t i = 0; i < size_; i++)  // пробегаемся по стеку
+      (size_ + 1)));
+    for (size_t i = 0; i < size_; i++)
     {
       new (&new_data[i]) T(
-        std::move(data_[i]));  // перемещаем элемент из даты в нью дату
-      data_[i].~T();  // вызываем диструктор к элементу даты
+        move(data_[i]));
+      data_[i].~T();
     }
     return new_data;
   }
 };
 }  // namespace bmstu
-
-// & - это ссылка, а && - rvalue ссылка, которая позволяет не копировать объект
-// noexcept означает что компилятору не следует проверять исключения и тратить
-// на это время. используется тогда, когда известен тот факт, что исключений
-// нет.
-// nullptr - пустой указатель. используется в С++ вместо NULL с 2011 года. NULL
-// всё ещё работает, не считается менее корректным.
